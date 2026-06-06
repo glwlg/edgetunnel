@@ -408,6 +408,15 @@ export default {
 						if (!ua.includes('mozilla')) responseHeaders["Content-Disposition"] = `attachment; filename*=utf-8''${encodeURIComponent(config_JSON.优选订阅生成.SUBNAME)}`;
 						const 协议类型 = ((url.searchParams.has('surge') || ua.includes('surge')) && config_JSON.协议类型 !== 'ss') ? 'tro' + 'jan' : config_JSON.协议类型;
 						let 订阅内容 = '';
+						if (订阅类型 === 'glwlg-provider' || url.searchParams.has('glwlg-provider')) {
+							const 场景列表 = url.searchParams.has('candidate')
+								? await 获取场景候选订阅列表(env, request, config_JSON, url, 订阅场景)
+								: await 获取订阅优选列表(env, request, config_JSON, url);
+							订阅内容 = 生成Mihomo测试YAML(场景列表.records, config_JSON, 场景列表.profile, userID, url.searchParams.get('batch') || '', { providerOnly: true });
+							responseHeaders["content-type"] = 'application/x-yaml; charset=utf-8';
+							responseHeaders["X-GLWLG-Profile-Source"] = 场景列表.source;
+							return new Response(订阅内容, { status: 200, headers: responseHeaders });
+						}
 						if (订阅类型 === 'glwlg-mihomo' || url.searchParams.has('mihomo-test') || url.searchParams.has('glwlg-mihomo')) {
 							const 场景列表 = url.searchParams.has('candidate')
 								? await 获取场景候选订阅列表(env, request, config_JSON, url, 订阅场景)
@@ -5477,7 +5486,7 @@ function yamlQuote(value) {
 	return JSON.stringify(String(value ?? ''));
 }
 
-function 生成Mihomo测试YAML(records, config_JSON, profile, userID, batch = '') {
+function 生成Mihomo测试YAML(records, config_JSON, profile, userID, batch = '', options = {}) {
 	const scene = 获取场景档案(profile);
 	const hosts = Array.isArray(config_JSON.HOSTS) && config_JSON.HOSTS.length ? config_JSON.HOSTS : [config_JSON.HOST];
 	const sniHost = String(hosts[0] || config_JSON.HOST || '').replace(/^\*+\./, '');
@@ -5518,6 +5527,15 @@ function 生成Mihomo测试YAML(records, config_JSON, profile, userID, batch = '
 		return { name, yaml: base.join('\n') };
 	});
 	const proxyNames = proxies.map(item => item.name);
+	if (options.providerOnly) {
+		return [
+			`# GLWLG 场景优选候选 Provider: ${scene.label}`,
+			`# profile=${profile}`,
+			`proxies:`,
+			proxies.length ? proxies.map(item => item.yaml).join('\n') : `  []`,
+			``
+		].join('\n');
+	}
 	const directDomainRules = directHosts.map(host => {
 		if (host.startsWith('*.')) return `  - DOMAIN-SUFFIX,${host.slice(2)},DIRECT`;
 		return `  - DOMAIN,${host.replace(/^\*+\./, '')},DIRECT`;
