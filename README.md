@@ -1,4 +1,4 @@
-# 🚀 edgetunnel 2.1
+# 🚀 GLWLG edgetunnel 2.1
 ![后台页面](./img.png)
 
 [![Stars](https://img.shields.io/github/stars/cmliu/edgetunnel?style=flat-square&logo=github)](https://github.com/cmliu/edgetunnel/stargazers)
@@ -15,7 +15,7 @@
 
 **edgetunnel** 是一个基于 CF Workers/Pages 平台的边缘计算隧道解密方案。它能够高效地处理网络流量，并提供强大的管理面板和灵活的节点配置能力。
 
-- 🖥️ **Demo 演示站点**：[https://EDT-Pages.github.io/admin](https://EDT-Pages.github.io/admin)
+- 🖥️ **GLWLG 管理页面**：[https://glwlg.github.io/EDT-Pages.github.io/admin](https://glwlg.github.io/EDT-Pages.github.io/admin)
 
 ### ✨ 核心特性
 

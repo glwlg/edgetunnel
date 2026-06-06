@@ -2,7 +2,7 @@
 let config_JSON, 反代IP = '', 启用SOCKS5反代 = null, 启用SOCKS5全局反代 = false, 我的SOCKS5账号 = '', parsedSocks5Address = {};
 let 缓存SOCKS5白名单 = null, 缓存反代IP, 缓存反代解析数组, 缓存反代数组索引 = 0, 启用反代兜底 = true, 调试日志打印 = false;
 let SOCKS5白名单 = ['*tapecontent.net', '*cloudatacdn.com', '*loadshare.org', '*cdn-centaurus.com', 'scholar.google.com'];
-const 默认Pages静态页面 = 'https://edt-pages.github.io';
+const 默认Pages静态页面 = 'https://glwlg.github.io/EDT-Pages.github.io';
 function 获取Pages静态页面(env = {}) {
 	const 自定义Pages静态页面 = env.PAGES_URL || env.PAGES || env.PAGE_URL || 默认Pages静态页面;
 	try {
