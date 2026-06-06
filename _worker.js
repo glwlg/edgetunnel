@@ -5381,6 +5381,7 @@ function 生成Mihomo测试YAML(records, config_JSON, profile, userID) {
 	const scene = 获取场景档案(profile);
 	const hosts = Array.isArray(config_JSON.HOSTS) && config_JSON.HOSTS.length ? config_JSON.HOSTS : [config_JSON.HOST];
 	const sniHost = String(hosts[0] || config_JSON.HOST || '').replace(/^\*+\./, '');
+	const directHosts = [...new Set(hosts.concat(config_JSON.HOST || '').map(host => String(host || '').trim().toLowerCase()).filter(Boolean))];
 	const { type: 传输协议, 路径字段名 } = 获取传输协议配置(config_JSON);
 	const groupName = `GLWLG-${scene.label}-自动优选`;
 	const selectName = `GLWLG-${scene.label}-手动选择`;
@@ -5415,9 +5416,17 @@ function 生成Mihomo测试YAML(records, config_JSON, profile, userID) {
 		return { name, yaml: base.join('\n') };
 	});
 	const proxyNames = proxies.map(item => item.name);
+	const directDomainRules = directHosts.map(host => {
+		if (host.startsWith('*.')) return `  - DOMAIN-SUFFIX,${host.slice(2)},DIRECT`;
+		return `  - DOMAIN,${host.replace(/^\*+\./, '')},DIRECT`;
+	});
 	return [
-		`# GLWLG 场景优选测试订阅: ${scene.label}`,
+		`# GLWLG 场景优选候选订阅: ${scene.label}`,
 		`# profile=${profile}`,
+		`# 只用于把候选节点注册到 OpenClash/Mihomo 控制口后做 /proxies/{name}/delay 实测。`,
+		`# 默认 MATCH,DIRECT，不接管日常流量，避免候选节点全失败时管理页和控制口一起断联。`,
+		`mode: rule`,
+		`log-level: info`,
 		`proxies:`,
 		proxies.length ? proxies.map(item => item.yaml).join('\n') : `  []`,
 		`proxy-groups:`,
@@ -5434,7 +5443,17 @@ function 生成Mihomo测试YAML(records, config_JSON, profile, userID) {
 		`      - ${yamlQuote(groupName)}`,
 		...(proxyNames.length ? proxyNames.map(name => `      - ${yamlQuote(name)}`) : [`      - DIRECT`]),
 		`rules:`,
-		`  - MATCH,${selectName}`,
+		...directDomainRules,
+		`  - DOMAIN,localhost,DIRECT`,
+		`  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve`,
+		`  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve`,
+		`  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve`,
+		`  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve`,
+		`  - IP-CIDR,169.254.0.0/16,DIRECT,no-resolve`,
+		`  - IP-CIDR6,::1/128,DIRECT,no-resolve`,
+		`  - IP-CIDR6,fc00::/7,DIRECT,no-resolve`,
+		`  - IP-CIDR6,fe80::/10,DIRECT,no-resolve`,
+		`  - MATCH,DIRECT`,
 		``
 	].join('\n');
 }
