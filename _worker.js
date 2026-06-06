@@ -5250,6 +5250,7 @@ const 场景优选中国地区数量上限 = 5;
 const 场景优选美国数量 = 5;
 const 场景优选日本数量 = 5;
 const 场景优选欧洲数量 = 5;
+const 场景优选地区种子API = 'https://www.wetest.vip/api/cf2dns/get_cloudflare_ip?key=o1zrmHAF&type=v4';
 const 中国地区国家代码 = new Set(['CN', 'HK', 'TW', 'MO']);
 const 欧洲国家代码 = new Set(['AL', 'AD', 'AT', 'BY', 'BE', 'BA', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GI', 'GR', 'HU', 'IS', 'IE', 'IT', 'XK', 'LV', 'LI', 'LT', 'LU', 'MT', 'MD', 'MC', 'ME', 'NL', 'MK', 'NO', 'PL', 'PT', 'RO', 'RU', 'SM', 'RS', 'SK', 'SI', 'ES', 'SE', 'CH', 'TR', 'UA', 'GB', 'UK', 'VA']);
 const 国家名称映射 = {
@@ -5260,6 +5261,48 @@ const 国家名称映射 = {
 	FI: '芬兰', NO: '挪威', DK: '丹麦', IE: '爱尔兰', AT: '奥地利',
 	BE: '比利时', PT: '葡萄牙', CZ: '捷克', RO: '罗马尼亚'
 };
+const CloudflareColo地区映射 = {
+	HKG: { country: 'HK', continent: 'AS', city: 'Hong Kong' },
+	TPE: { country: 'TW', continent: 'AS', city: 'Taipei' },
+	NRT: { country: 'JP', continent: 'AS', city: 'Tokyo' },
+	KIX: { country: 'JP', continent: 'AS', city: 'Osaka' },
+	FUK: { country: 'JP', continent: 'AS', city: 'Fukuoka' },
+	SIN: { country: 'SG', continent: 'AS', city: 'Singapore' },
+	ICN: { country: 'KR', continent: 'AS', city: 'Seoul' },
+	LAX: { country: 'US', continent: 'NA', city: 'Los Angeles' },
+	SJC: { country: 'US', continent: 'NA', city: 'San Jose' },
+	PHX: { country: 'US', continent: 'NA', city: 'Phoenix' },
+	SEA: { country: 'US', continent: 'NA', city: 'Seattle' },
+	DFW: { country: 'US', continent: 'NA', city: 'Dallas' },
+	ORD: { country: 'US', continent: 'NA', city: 'Chicago' },
+	IAD: { country: 'US', continent: 'NA', city: 'Ashburn' },
+	EWR: { country: 'US', continent: 'NA', city: 'Newark' },
+	AMS: { country: 'NL', continent: 'EU', city: 'Amsterdam' },
+	FRA: { country: 'DE', continent: 'EU', city: 'Frankfurt' },
+	CDG: { country: 'FR', continent: 'EU', city: 'Paris' },
+	LHR: { country: 'GB', continent: 'EU', city: 'London' },
+	MAD: { country: 'ES', continent: 'EU', city: 'Madrid' },
+	MXP: { country: 'IT', continent: 'EU', city: 'Milan' },
+	WAW: { country: 'PL', continent: 'EU', city: 'Warsaw' },
+	ARN: { country: 'SE', continent: 'EU', city: 'Stockholm' },
+	HEL: { country: 'FI', continent: 'EU', city: 'Helsinki' },
+	CPH: { country: 'DK', continent: 'EU', city: 'Copenhagen' },
+	PRG: { country: 'CZ', continent: 'EU', city: 'Prague' },
+	VIE: { country: 'AT', continent: 'EU', city: 'Vienna' },
+	BRU: { country: 'BE', continent: 'EU', city: 'Brussels' },
+	LIS: { country: 'PT', continent: 'EU', city: 'Lisbon' },
+	ZRH: { country: 'CH', continent: 'EU', city: 'Zurich' }
+};
+const 内置地区候选种子 = [
+	{ address: '162.159.45.26', colo: 'NRT', line: 'regional-jp', remark: '日本种子' },
+	{ address: '162.159.38.68', colo: 'NRT', line: 'regional-jp', remark: '日本种子' },
+	{ address: '162.159.45.156', colo: 'NRT', line: 'regional-jp', remark: '日本种子' },
+	{ address: '104.17.102.35', colo: 'HKG', line: 'regional-hk', remark: '香港种子' },
+	{ address: '104.17.211.225', colo: 'HKG', line: 'regional-hk', remark: '香港种子' },
+	{ address: '104.18.87.80', colo: 'HKG', line: 'regional-hk', remark: '香港种子' },
+	{ address: '104.18.89.106', colo: 'HKG', line: 'regional-hk', remark: '香港种子' },
+	{ address: '104.16.252.71', colo: 'HKG', line: 'regional-hk', remark: '香港种子' },
+];
 const 场景优选档案 = {
 	'cmcc-js-home': { label: '江苏移动', asOrg: 'cmcc', kvKey: 'bestip:cmcc-js-home' },
 	'cu-mobile': { label: '联通手机', asOrg: 'cu', kvKey: 'bestip:cu-mobile' },
@@ -5357,6 +5400,8 @@ function 获取记录国家代码(record, scene) {
 	if (/^[A-Z]{2}$/.test(explicit)) return explicit;
 	const flagCountry = 旗标转国家代码(record.flag || 提取备注旗标(record.remark || ''));
 	if (flagCountry) return flagCountry;
+	const coloInfo = 获取Colo地区信息(record.colo || 提取备注Colo(record.remark || ''));
+	if (coloInfo?.country) return coloInfo.country;
 	return '';
 }
 
@@ -5370,6 +5415,35 @@ function 获取记录旗标(record, scene) {
 function 获取国家显示名称(country) {
 	const code = String(country || '').trim().toUpperCase();
 	return 国家名称映射[code] || code;
+}
+
+function 获取Colo地区信息(colo) {
+	const code = String(colo || '').trim().toUpperCase();
+	return CloudflareColo地区映射[code] || null;
+}
+
+function 提取备注Colo(remark) {
+	const matches = String(remark || '').toUpperCase().match(/\b[A-Z]{3}\b/g) || [];
+	return matches.find(code => CloudflareColo地区映射[code]) || '';
+}
+
+function 解析优选备注指标(remark) {
+	let text = String(remark || '').trim();
+	const metrics = {};
+	const bracket = text.match(/\[([^\]]+)]\s*$/);
+	if (bracket) {
+		text = text.slice(0, bracket.index).trim();
+		const metricText = bracket[1];
+		const clash = metricText.match(/Clash\s*(\d+(?:\.\d+)?)ms/i);
+		const browser = metricText.match(/网页\s*(\d+(?:\.\d+)?)ms/i);
+		const speed = metricText.match(/(\d+(?:\.\d+)?)\s*Mbps/i);
+		const colo = 提取备注Colo(metricText);
+		if (clash) metrics.clashDelayMs = Number(clash[1]);
+		if (browser) metrics.browserLatencyMs = Number(browser[1]);
+		if (speed) metrics.browserMbps = Number(speed[1]);
+		if (colo) metrics.colo = colo;
+	}
+	return { remark: text, ...metrics };
 }
 
 function 获取记录地区标签(record, scene) {
@@ -5417,13 +5491,16 @@ function 标准化优选记录(record, profile = 'cf-fallback') {
 	);
 	const parsed = 解析优选地址行(拼接地址);
 	if (!parsed) return null;
-	const browserLatencyMs = 安全数值(record.browserLatencyMs ?? record.latency ?? record.latencyMs);
-	const browserMbps = 安全数值(record.browserMbps ?? record.speedMbps ?? record.speed);
-	const clashDelayMs = 安全数值(record.clashDelayMs ?? record.delay ?? record.delayMs);
+	const parsedMetrics = 解析优选备注指标(parsed.remark);
+	const browserLatencyMs = 安全数值(record.browserLatencyMs ?? record.latency ?? record.latencyMs ?? parsedMetrics.browserLatencyMs);
+	const browserMbps = 安全数值(record.browserMbps ?? record.speedMbps ?? parsedMetrics.browserMbps);
+	const clashDelayMs = 安全数值(record.clashDelayMs ?? record.delay ?? record.delayMs ?? parsedMetrics.clashDelayMs);
 	const failed = Boolean(record.failed || record.status === 'failed' || record.error);
 	if (failed || (clashDelayMs !== null && (clashDelayMs <= 0 || clashDelayMs > 3000))) return null;
-	const remark = String(record.remark || parsed.remark || scene.label).trim();
-	const country = 获取记录国家代码({ ...record, remark }, scene);
+	const remark = String(record.remark || parsedMetrics.remark || parsed.remark || scene.label).trim();
+	const colo = String(record.colo || parsedMetrics.colo || '').trim().toUpperCase();
+	const coloInfo = 获取Colo地区信息(colo);
+	const country = 获取记录国家代码({ ...record, remark, colo }, scene);
 	const flag = 获取记录旗标({ ...record, remark, country }, scene);
 	return {
 		address: parsed.address,
@@ -5432,13 +5509,13 @@ function 标准化优选记录(record, profile = 'cf-fallback') {
 		browserLatencyMs,
 		browserMbps,
 		clashDelayMs,
-		colo: String(record.colo || '').trim(),
+		colo,
 		country,
 		flag,
-		continent: String(record.continent || '').trim().toUpperCase(),
+		continent: String(record.continent || coloInfo?.continent || '').trim().toUpperCase(),
 		regionCode: String(record.regionCode || '').trim(),
 		region: String(record.region || '').trim(),
-		city: String(record.city || '').trim(),
+		city: String(record.city || coloInfo?.city || '').trim(),
 		responseIp: String(record.responseIp || record.ip || '').trim(),
 		source: String(record.source || 'manual').trim(),
 		testedAt: record.testedAt || new Date().toISOString(),
@@ -5574,6 +5651,12 @@ function 解析候选数量(url) {
 	return Math.max(1, Math.min(240, Math.round(count)));
 }
 
+function 解析候选来源(url) {
+	const source = String(url.searchParams.get('source') || url.searchParams.get('candidateSource') || 'mixed').trim().toLowerCase();
+	if (['mixed', 'regional', 'random'].includes(source)) return source;
+	return 'mixed';
+}
+
 function 保序标准化优选记录(records, profile, limit = 240) {
 	const seen = new Set(), output = [];
 	for (const item of Array.isArray(records) ? records : []) {
@@ -5608,14 +5691,83 @@ async function 保存场景候选记录(env, profile, inputRecords) {
 	return records;
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetch(url, { ...options, signal: controller.signal });
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+function 获取场景地区种子分组顺序(profile) {
+	if (profile === 'cmcc-js-home') return ['CM', 'CU', 'CT'];
+	if (profile === 'cu-mobile') return ['CU', 'CM', 'CT'];
+	return ['CM', 'CU', 'CT'];
+}
+
+function 构建地区种子记录(item, ports, profile) {
+	const scene = 获取场景档案(profile);
+	const address = String(item.ip || item.address || '').trim();
+	if (!address) return [];
+	const colo = String(item.colo || '').trim().toUpperCase();
+	const coloInfo = 获取Colo地区信息(colo) || {};
+	const lineName = String(item.line_name || item.remark || item.line || '').trim();
+	const speedKbps = 安全数值(item.speed);
+	const browserMbps = Number.isFinite(speedKbps) ? Number(((speedKbps * 8) / 1000).toFixed(2)) : null;
+	const latency = 安全数值(item.rtt_avg ?? item.latency);
+	const remark = `${scene.label} ${lineName || '地区种子'}`.trim();
+	return ports.map(port => ({
+		address,
+		port,
+		remark,
+		browserLatencyMs: latency,
+		browserMbps,
+		colo,
+		country: coloInfo.country || '',
+		flag: 国家代码转旗标(coloInfo.country || '') || '',
+		continent: coloInfo.continent || '',
+		city: coloInfo.city || '',
+		source: item.source || 'regional',
+		testedAt: new Date().toISOString(),
+		score: -50,
+	}));
+}
+
+async function 获取公开地区种子记录(profile, ports) {
+	const records = [];
+	for (const item of 内置地区候选种子) {
+		records.push(...构建地区种子记录({ ...item, source: 'regional-builtin' }, ports, profile));
+	}
+	try {
+		const response = await fetchWithTimeout(场景优选地区种子API, {
+			headers: { 'User-Agent': 'GLWLG-BestIP/1.0' },
+			cf: { cacheTtl: 300, cacheEverything: true }
+		}, 6000);
+		if (!response.ok) throw new Error(`HTTP ${response.status}`);
+		const data = await response.json();
+		const info = data?.info || {};
+		for (const group of 获取场景地区种子分组顺序(profile)) {
+			const list = Array.isArray(info[group]) ? info[group] : [];
+			for (const item of list) {
+				records.push(...构建地区种子记录({ ...item, source: `regional-wetest-${group.toLowerCase()}` }, ports, profile));
+			}
+		}
+	} catch (error) {
+		console.warn(`[场景候选] 地区种子接口失败: ${error.message || error}`);
+	}
+	return 保序标准化优选记录(records, profile, 180);
+}
+
 async function 生成并保存场景候选记录(env, request, config_JSON, url, profile) {
 	const scene = 获取场景档案(profile);
 	const count = 解析候选数量(url);
 	const ports = 解析候选端口(url);
+	const source = 解析候选来源(url);
 	const hosts = Array.isArray(config_JSON.HOSTS) && config_JSON.HOSTS.length ? config_JSON.HOSTS : [config_JSON.HOST];
 	const primaryHost = String(hosts[0] || config_JSON.HOST || '').replace(/^\*+\./, '');
 	const includeHost = url.searchParams.get('includeHost') !== '0';
-	const [randomLines] = await 生成随机IP(request, count, -1, scene.asOrg, ports);
 	const records = [];
 	if (includeHost && primaryHost) {
 		records.push({
@@ -5627,9 +5779,15 @@ async function 生成并保存场景候选记录(env, request, config_JSON, url,
 			testedAt: new Date().toISOString(),
 		});
 	}
-	for (const line of randomLines) {
-		const record = 标准化优选记录(line, profile);
-		if (record) records.push({ ...record, source: 'candidate' });
+	const regionalRecords = source === 'random' ? [] : await 获取公开地区种子记录(profile, ports);
+	for (const record of regionalRecords.slice(0, count)) records.push(record);
+	const randomCount = source === 'regional' ? 0 : Math.max(0, count - regionalRecords.length);
+	if (randomCount > 0) {
+		const [randomLines] = await 生成随机IP(request, randomCount, -1, scene.asOrg, ports);
+		for (const line of randomLines) {
+			const record = 标准化优选记录(line, profile);
+			if (record) records.push({ ...record, source: 'candidate' });
+		}
 	}
 	return 保存场景候选记录(env, profile, records);
 }
