@@ -5244,10 +5244,12 @@ async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重�
 	return config_JSON;
 }
 
+const 场景优选保存数量 = 20;
+const 场景优选延迟分档毫秒 = 150;
 const 场景优选档案 = {
-	'cmcc-js-home': { label: '江苏移动', asOrg: 'cmcc', kvKey: 'bestip:cmcc-js-home' },
-	'cu-mobile': { label: '联通手机', asOrg: 'cu', kvKey: 'bestip:cu-mobile' },
-	'cf-fallback': { label: '兜底', asOrg: 'cf', kvKey: 'bestip:cf-fallback' },
+	'cmcc-js-home': { label: '江苏移动', asOrg: 'cmcc', kvKey: 'bestip:cmcc-js-home', country: 'CN', flag: '🇨🇳' },
+	'cu-mobile': { label: '联通手机', asOrg: 'cu', kvKey: 'bestip:cu-mobile', country: 'CN', flag: '🇨🇳' },
+	'cf-fallback': { label: '兜底', asOrg: 'cf', kvKey: 'bestip:cf-fallback', country: '', flag: '🌐' },
 };
 
 function 获取场景档案(profile) {
@@ -5311,6 +5313,54 @@ function 安全数值(value) {
 	return Number.isFinite(num) ? num : null;
 }
 
+function 国家代码转旗标(country) {
+	const code = String(country || '').trim().toUpperCase();
+	if (!/^[A-Z]{2}$/.test(code)) return '';
+	return [...code].map(char => String.fromCodePoint(0x1F1E6 + char.charCodeAt(0) - 65)).join('');
+}
+
+function 旗标转国家代码(flag) {
+	const chars = [...String(flag || '').trim()];
+	if (chars.length < 2) return '';
+	const code = chars.slice(0, 2).map(char => {
+		const value = char.codePointAt(0) - 0x1F1E6;
+		return value >= 0 && value <= 25 ? String.fromCharCode(65 + value) : '';
+	}).join('');
+	return /^[A-Z]{2}$/.test(code) ? code : '';
+}
+
+function 提取备注旗标(remark) {
+	const match = String(remark || '').match(/^([\u{1F1E6}-\u{1F1FF}]{2})\s*/u);
+	return match ? match[1] : '';
+}
+
+function 去除备注旗标(remark) {
+	return String(remark || '').replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '').trim();
+}
+
+function 获取记录国家代码(record, scene) {
+	const explicit = String(record.country || record.countryCode || record.cc || '').trim().toUpperCase();
+	if (/^[A-Z]{2}$/.test(explicit)) return explicit;
+	const flagCountry = 旗标转国家代码(record.flag || 提取备注旗标(record.remark || ''));
+	if (flagCountry) return flagCountry;
+	return String(scene.country || '').trim().toUpperCase();
+}
+
+function 获取记录旗标(record, scene) {
+	const explicit = String(record.flag || '').trim();
+	if (explicit) return explicit;
+	const countryFlag = 国家代码转旗标(获取记录国家代码(record, scene));
+	return countryFlag || scene.flag || '🌐';
+}
+
+function 构建优选记录备注(record, profile = 'cf-fallback') {
+	const scene = 获取场景档案(profile);
+	const flag = 获取记录旗标(record, scene);
+	const rawRemark = 去除备注旗标(record.remark || scene.label);
+	const sceneRemark = rawRemark.includes(scene.label) ? rawRemark : `${scene.label} ${rawRemark}`.trim();
+	return `${flag} ${sceneRemark}`.trim();
+}
+
 function 标准化优选记录(record, profile = 'cf-fallback') {
 	const scene = 获取场景档案(profile);
 	if (typeof record === 'string') record = { line: record };
@@ -5325,14 +5375,19 @@ function 标准化优选记录(record, profile = 'cf-fallback') {
 	const clashDelayMs = 安全数值(record.clashDelayMs ?? record.delay ?? record.delayMs);
 	const failed = Boolean(record.failed || record.status === 'failed' || record.error);
 	if (failed || (clashDelayMs !== null && (clashDelayMs <= 0 || clashDelayMs > 3000))) return null;
+	const remark = String(record.remark || parsed.remark || scene.label).trim();
+	const country = 获取记录国家代码({ ...record, remark }, scene);
+	const flag = 获取记录旗标({ ...record, remark, country }, scene);
 	return {
 		address: parsed.address,
 		port: parsed.port,
-		remark: String(record.remark || parsed.remark || scene.label).trim(),
+		remark,
 		browserLatencyMs,
 		browserMbps,
 		clashDelayMs,
 		colo: String(record.colo || '').trim(),
+		country,
+		flag,
 		source: String(record.source || 'manual').trim(),
 		testedAt: record.testedAt || new Date().toISOString(),
 		score: 安全数值(record.score),
@@ -5353,10 +5408,15 @@ function 排序优选记录(records) {
 function 比较优选记录(a, b) {
 	const aHasClash = Number.isFinite(a.clashDelayMs), bHasClash = Number.isFinite(b.clashDelayMs);
 	if (aHasClash !== bHasClash) return aHasClash ? -1 : 1;
-	if (aHasClash && a.clashDelayMs !== b.clashDelayMs) return a.clashDelayMs - b.clashDelayMs;
 	const aSpeed = Number.isFinite(a.browserMbps) ? a.browserMbps : -1;
 	const bSpeed = Number.isFinite(b.browserMbps) ? b.browserMbps : -1;
-	if (aSpeed !== bSpeed) return bSpeed - aSpeed;
+	if (aHasClash) {
+		const aDelayBucket = Math.floor(a.clashDelayMs / 场景优选延迟分档毫秒);
+		const bDelayBucket = Math.floor(b.clashDelayMs / 场景优选延迟分档毫秒);
+		if (aDelayBucket !== bDelayBucket) return aDelayBucket - bDelayBucket;
+		if (aSpeed !== bSpeed) return bSpeed - aSpeed;
+		if (a.clashDelayMs !== b.clashDelayMs) return a.clashDelayMs - b.clashDelayMs;
+	} else if (aSpeed !== bSpeed) return bSpeed - aSpeed;
 	const aLatency = Number.isFinite(a.browserLatencyMs) ? a.browserLatencyMs : 999999;
 	const bLatency = Number.isFinite(b.browserLatencyMs) ? b.browserLatencyMs : 999999;
 	if (aLatency !== bLatency) return aLatency - bLatency;
@@ -5370,9 +5430,7 @@ function 优选记录转行(record, profile = 'cf-fallback') {
 	if (Number.isFinite(record.browserLatencyMs)) metrics.push(`网页 ${Math.round(record.browserLatencyMs)}ms`);
 	if (Number.isFinite(record.browserMbps)) metrics.push(`${record.browserMbps.toFixed(2)}Mbps`);
 	if (record.colo) metrics.push(record.colo);
-	const remark = String(record.remark || scene.label).includes(scene.label)
-		? String(record.remark || scene.label)
-		: `${scene.label} ${record.remark || ''}`.trim();
+	const remark = 构建优选记录备注(record, profile);
 	return `${格式化优选地址端口(record.address, record.port)}#${remark}${metrics.length ? '[' + metrics.join(' ') + ']' : ''}`;
 }
 
@@ -5383,7 +5441,7 @@ async function 读取场景优选记录(env, profile) {
 		if (!raw) return [];
 		const data = JSON.parse(raw);
 		const records = Array.isArray(data) ? data : (Array.isArray(data.records) ? data.records : []);
-		return 排序优选记录(records.map(item => 标准化优选记录(item, profile)).filter(Boolean)).slice(0, 24);
+		return 排序优选记录(records.map(item => 标准化优选记录(item, profile)).filter(Boolean)).slice(0, 场景优选保存数量);
 	} catch (error) {
 		console.error(`[场景优选] 读取失败 ${profile}:`, error);
 		return [];
@@ -5392,7 +5450,7 @@ async function 读取场景优选记录(env, profile) {
 
 async function 保存场景优选记录(env, profile, inputRecords) {
 	const scene = 获取场景档案(profile);
-	const records = 排序优选记录((Array.isArray(inputRecords) ? inputRecords : []).map(item => 标准化优选记录(item, profile)).filter(Boolean)).slice(0, 24);
+	const records = 排序优选记录((Array.isArray(inputRecords) ? inputRecords : []).map(item => 标准化优选记录(item, profile)).filter(Boolean)).slice(0, 场景优选保存数量);
 	await env.KV.put(scene.kvKey, JSON.stringify({ profile, label: scene.label, updatedAt: new Date().toISOString(), records }, null, 2));
 	return records;
 }
@@ -5491,11 +5549,13 @@ async function 获取订阅优选列表(env, request, config_JSON, url) {
 	const legacyText = await env.KV.get('ADD.txt');
 	if (legacyText && legacyText.trim()) {
 		const lines = await 整理成数组(legacyText);
-		return { profile, records: lines.map(line => 标准化优选记录(line, profile)).filter(Boolean), lines, source: 'legacy' };
+		const records = lines.map(line => 标准化优选记录(line, profile)).filter(Boolean);
+		return { profile, records, lines: records.map(record => 优选记录转行(record, profile)), source: 'legacy' };
 	}
 	const scene = 获取场景档案(profile);
 	const [randomLines] = await 生成随机IP(request, config_JSON.优选订阅生成.本地IP库.随机数量, config_JSON.优选订阅生成.本地IP库.指定端口, scene.asOrg);
-	return { profile, records: randomLines.map(line => 标准化优选记录(line, profile)).filter(Boolean), lines: randomLines, source: 'random' };
+	const randomRecords = randomLines.map(line => 标准化优选记录(line, profile)).filter(Boolean);
+	return { profile, records: randomRecords, lines: randomRecords.map(record => 优选记录转行(record, profile)), source: 'random' };
 }
 
 function yamlQuote(value) {
@@ -5513,7 +5573,7 @@ function 生成Mihomo测试YAML(records, config_JSON, profile, userID, batch = '
 	const groupName = `${namePrefix}-自动优选`;
 	const selectName = `${namePrefix}-手动选择`;
 	const proxies = records.map((record, index) => {
-		const name = `${namePrefix}-${String(index + 1).padStart(2, '0')}-${record.colo || record.address}`;
+		const name = `${namePrefix}-${String(index + 1).padStart(2, '0')}-${获取记录旗标(record, scene)}-${record.colo || record.country || record.address}`;
 		const server = String(record.address || '').replace(/^\[|]$/g, '');
 		const path = 获取传输路径参数值(config_JSON, config_JSON.完整节点路径);
 		const base = [
