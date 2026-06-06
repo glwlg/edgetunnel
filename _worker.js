@@ -292,6 +292,18 @@ export default {
 								console.error('保存场景优选失败:', error);
 								return new Response(JSON.stringify({ error: '保存场景优选失败: ' + error.message }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							}
+						} else if (访问路径 === 'admin/bestip-candidates.json') { // 保存当前 OpenClash 候选池
+							try {
+								const profile = 规范化优选场景(url.searchParams.get('profile')) || 识别优选场景(request, url);
+								const payload = await request.json();
+								const records = Array.isArray(payload) ? payload : (Array.isArray(payload.records) ? payload.records : []);
+								const saved = await 保存场景候选记录(env, profile, records);
+								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Profile_BestIP_Candidates', config_JSON));
+								return new Response(JSON.stringify({ success: true, profile, label: 获取场景档案(profile).label, count: saved.length, records: saved, lines: saved.map(record => 优选记录转行(record, profile)) }, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+							} catch (error) {
+								console.error('保存场景候选失败:', error);
+								return new Response(JSON.stringify({ error: '保存场景候选失败: ' + error.message }), { status: 500, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+							}
 						} else if (区分大小写访问路径 === 'admin/ADD.txt') { // 保存自定义优选IP
 							try {
 								const customIPs = await request.text();
@@ -5308,7 +5320,7 @@ function 标准化优选记录(record, profile = 'cf-fallback') {
 	const browserMbps = 安全数值(record.browserMbps ?? record.speedMbps ?? record.speed);
 	const clashDelayMs = 安全数值(record.clashDelayMs ?? record.delay ?? record.delayMs);
 	const failed = Boolean(record.failed || record.status === 'failed' || record.error);
-	if (failed || (clashDelayMs !== null && clashDelayMs > 3000)) return null;
+	if (failed || (clashDelayMs !== null && (clashDelayMs <= 0 || clashDelayMs > 3000))) return null;
 	return {
 		address: parsed.address,
 		port: parsed.port,
